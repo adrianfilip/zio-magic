@@ -11,11 +11,14 @@ case class Graph[Key: Eq, A: LayerLike](nodes: List[Node[Key, A]]) {
     })
 
   def buildComplete(outputs: List[Key]): Validation[GraphError[Key, A], A] =
-    TraversableOps(outputs)
-      .foreach { output =>
-        getNodeWithOutput(output, error = GraphError.MissingTopLevelDependency(output))
-      }
-      .flatMap(TraversableOps(_).foreach(node => buildNode(node, Set(node))))
+    ZValidation
+      .collectAll(
+        outputs
+          .map { output =>
+            getNodeWithOutput(output, error = GraphError.MissingTopLevelDependency(output))
+          }
+      )
+      .flatMap { ls => ZValidation.collectAll(ls.map { node => buildNode(node, Set(node)) }) }
       .map(_.distinct.combineHorizontally)
 
   private def getNodeWithOutput[E](output: Key, error: E = ()): Validation[E, Node[Key, A]] =
