@@ -1,10 +1,8 @@
 package zio.magic.macros.utils
 
-import zio.magic.macros.graph.{Eq, Graph, GraphError, LayerLike, Node}
-import zio.prelude.Validation
+import zio.magic.macros.graph.{Graph, GraphError, LayerLike, Node}
 import zio.{Chunk, NonEmptyChunk}
 
-import scala.reflect.api.Universe
 import scala.reflect.macros.blackbox
 
 trait ExprGraphSupport { self: MacroUtils =>
@@ -16,12 +14,13 @@ trait ExprGraphSupport { self: MacroUtils =>
       if (output.isEmpty) {
         reify { zio.ZLayer.succeed(()) }.asInstanceOf[LayerExpr]
       } else
-        graph.buildComplete(output) match {
-          case Validation.Failure(errors) =>
-            c.abort(c.enclosingPosition, renderErrors(errors))
-          case Validation.Success(value) =>
-            value
-        }
+        graph
+          .buildComplete(output)
+          .fold(
+            errors => c.abort(c.enclosingPosition, renderErrors(NonEmptyChunk(errors))),
+            value => value
+          )
+          .runResult()
 
     private def renderErrors(errors: NonEmptyChunk[GraphError[c.Type, LayerExpr]]): String = {
       val allErrors = sortErrors(errors)
