@@ -24,10 +24,13 @@ case class Graph[Key: Eq, A: LayerLike](nodes: List[Node[Key, A]]) {
     }
 
   private def getDependencies[E](node: Node[Key, A]): Validation[GraphError[Key, A], List[Node[Key, A]]] =
-    TraversableOps(node.inputs)
-      .foreach { input =>
-        getNodeWithOutput(input, error = GraphError.MissingDependency(node, input))
-      }
+    ZValidation
+      .collectAll(
+        node.inputs
+          .map { input =>
+            getNodeWithOutput(input, error = GraphError.MissingDependency(node, input))
+          }
+      )
       .map(_.distinct)
 
   /** @param node The node to build the sub-graph for
@@ -36,14 +39,17 @@ case class Graph[Key: Eq, A: LayerLike](nodes: List[Node[Key, A]]) {
     */
   private def buildNode(node: Node[Key, A], seen: Set[Node[Key, A]] = Set.empty): Validation[GraphError[Key, A], A] =
     getDependencies(node)
-      .flatMap {
-        TraversableOps(_)
-          .foreach { out =>
-            for {
-              _    <- assertNonCircularDependency(node, seen, out)
-              tree <- buildNode(out, seen + out)
-            } yield tree
-          }
+      .flatMap { dependencies =>
+        ZValidation
+          .collectAll(
+            dependencies
+              .map { out =>
+                for {
+                  _    <- assertNonCircularDependency(node, seen, out)
+                  tree <- buildNode(out, seen + out)
+                } yield tree
+              }
+          )
           .map {
             case Nil      => node.value
             case children => children.distinct.combineHorizontally >>> node.value
