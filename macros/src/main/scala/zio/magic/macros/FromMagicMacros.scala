@@ -34,7 +34,8 @@ class FromMagicMacros(val c: blackbox.Context) extends MacroUtils with ExprGraph
     val graphString: String = graph.graph
       .map { layer => RenderGraph(layer.showTree) }
       .buildComplete(requirements)
-      .toOption
+      .fold(_ => None, renderGraph => Some(renderGraph))
+      .runResult()
       .get
       .render
 
@@ -89,7 +90,8 @@ class FromMagicMacros(val c: blackbox.Context) extends MacroUtils with ExprGraph
     val graphString: String = graph.graph
       .map { layer => RenderGraph(layer.showTree) }
       .buildComplete(requirements)
-      .toOption
+      .fold(_ => None, renderGraph => Some(renderGraph))
+      .runResult()
       .get
       .render
 
